@@ -1088,43 +1088,41 @@
             const rng = new Random(seed);
             const total = n * n;
 
-            state.grid = [];
-            state.groups = [];
+            let attempts = 0;
+            const MAX_ATTEMPTS = 50; //以此防止某些极端种子导致死循环卡死浏览器
 
-            for (let i = 0; i < total; i++) {
-                state.grid.push(rng.nextInt(0, 20));
-                state.groups.push(i);
-            }
+            do {
+                attempts++;
 
-            const luckyIndex = rng.nextInt(0, total - 1);
-            state.grid[luckyIndex] = 20;
+                // 每次重试前清空数据
+                state.grid = [];
+                state.groups = [];
 
-            let sum = state.grid.reduce((a, b) => a + b, 0);
-            if (sum % 2 !== 0) {
-                let adjustIndex = (luckyIndex + 1) % total;
-                if (state.grid[adjustIndex] > 0) state.grid[adjustIndex]--;
-                else state.grid[adjustIndex]++;
-            }
-
-            // --- 3x3 孤立中点 20 无解修正 ---
-            if (state.n === 3) {
-                const center = 4;
-                // 只有中间是20，且全图仅有一个20
-                if (state.grid[center] === 20 && state.grid.filter(x => x === 20).length === 1) {
-                    let swapTarget = center;
-                    while (swapTarget === center) {
-                        swapTarget = rng.nextInt(0, 8);
-                    }
-
-                    // 交换
-                    [state.grid[center], state.grid[swapTarget]] = [state.grid[swapTarget], state.grid[center]];
+                // 1. 生成基础网格
+                for (let i = 0; i < total; i++) {
+                    state.grid.push(rng.nextInt(0, 20));
+                    state.groups.push(i);
                 }
 
-                // 中间0也会严重降低丰富度
-                if (state.grid[center] === 0) {
-                    state.grid[center] = rng.nextInt(1, 10) * 2;
+                // 2. 插入幸运数字 20
+                const luckyIndex = rng.nextInt(0, total - 1);
+                state.grid[luckyIndex] = 20;
+
+                // 3. 奇偶性修正 (总和必须为偶数才有解)
+                let sum = state.grid.reduce((a, b) => a + b, 0);
+                if (sum % 2 !== 0) {
+                    let adjustIndex = (luckyIndex + 1) % total;
+                    if (state.grid[adjustIndex] > 0) state.grid[adjustIndex]--;
+                    else state.grid[adjustIndex]++;
                 }
-            }
+
+                // 4. 验证逻辑
+                // 如果不是 3x3，或者验证通过 (n3Valid返回true)，或者超出了尝试限制，则停止生成
+                // 注意：这里假定 n3Valid 函数已经在作用域内可用
+                if (state.n !== 3 || n3Valid(state.grid) || attempts >= MAX_ATTEMPTS) {
+                    break;
+                }
+            } while (true);
 
             // 初始颜色分配，防止相邻同色
             for (let i = 0; i < total; i++) {
@@ -1133,6 +1131,86 @@
 
             renderBoard();
             updateUI();
+        }
+
+        function n3Valid(nums) {
+            if (!Array.isArray(nums) || nums.length !== 9) {
+                throw new Error("参数必须是长度为 9 的数组");
+            }
+
+            const n = 9;
+            const FULL = (1 << n) - 1;
+
+            // 取最低位1的下标
+            const bitIndex = (lsb) => (Math.clz32(lsb) ^ 31);
+
+            // 1) 单格邻接
+            const cellNb = new Array(n).fill(0);
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const i = r * 3 + c;
+                    let m = 0;
+                    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+                    for (const [dr, dc] of dirs) {
+                        const rr = r + dr, cc = c + dc;
+                        if (0 <= rr && rr < 3 && 0 <= cc && cc < 3) {
+                            m |= (1 << (rr * 3 + cc));
+                        }
+                    }
+                    cellNb[i] = m;
+                }
+            }
+
+            // 2) neigh[mask]：mask 内所有格子的邻居并集
+            const neigh = new Array(1 << n).fill(0);
+            for (let mask = 1; mask <= FULL; mask++) {
+                const lsb = mask & -mask;
+                const idx = bitIndex(lsb);
+                neigh[mask] = neigh[mask ^ lsb] | cellNb[idx];
+            }
+
+            // 3) dp[mask] = Set(可达数值)
+            const dp = new Array(1 << n);
+            dp[0] = new Set();
+            for (let i = 0; i < n; i++) dp[1 << i] = new Set([nums[i]]);
+
+            // 4) 子集DP
+            for (let mask = 1; mask <= FULL; mask++) {
+                // 单格已初始化
+                if ((mask & (mask - 1)) === 0) continue;
+
+                const res = new Set();
+
+                // 最小位用于去重：A 必须包含最小位
+                const minbit = mask & -mask;
+
+                // 枚举 A 的非空真子集，B = mask ^ A
+                for (let A = (mask - 1) & mask; A; A = (A - 1) & mask) {
+                    if ((A & minbit) === 0) continue;
+                    const B = mask ^ A;
+                    if (B === 0) continue;
+
+                    // 必须相邻才允许合并
+                    if ((neigh[A] & B) === 0) continue;
+
+                    const SA = dp[A];
+                    const SB = dp[B];
+                    // 注意：如果 A 或 B 不可达（例如非连通集合），dp[...] 可能是 undefined
+                    if (!SA || !SB) continue;
+
+                    for (const va of SA) {
+                        for (const vb of SB) {
+                            res.add(Math.abs(va - vb));
+                        }
+                    }
+                }
+                dp[mask] = res;
+            }
+
+            // 5) 求最大值并判断是否为20
+            let best = -Infinity;
+            for (const v of dp[FULL]) best = Math.max(best, v);
+            return best === 20;
         }
 
         // 为 Group 分配一个不与邻居冲突的颜色
