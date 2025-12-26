@@ -1707,6 +1707,14 @@
                         }
                     }, 100);
                 }
+                else {
+                    setTimeout(() => {
+                        const firstUnplayed = document.querySelector('.level-btn:not(.played)');
+                        if (firstUnplayed) {
+                            firstUnplayed.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 100);
+                }
                 return;
             }
 
