@@ -1113,6 +1113,11 @@
                     // 交换
                     [state.grid[center], state.grid[swapTarget]] = [state.grid[swapTarget], state.grid[center]];
                 }
+
+                // 中间0也会严重降低丰富度
+                if (state.grid[center] === 0) {
+                    state.grid[center] = rng.nextInt(1, 10) * 2;
+                }
             }
 
             // 初始颜色分配，防止相邻同色
