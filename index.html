@@ -1100,6 +1100,21 @@
                 else state.grid[adjustIndex]++;
             }
 
+            // --- 3x3 孤立中点 20 无解修正 ---
+            if (state.n === 3) {
+                const center = 4;
+                // 只有中间是20，且全图仅有一个20
+                if (state.grid[center] === 20 && state.grid.filter(x => x === 20).length === 1) {
+                    let swapTarget = center;
+                    while (swapTarget === center) {
+                        swapTarget = rng.nextInt(0, 8);
+                    }
+                    
+                    // 交换
+                    [state.grid[center], state.grid[swapTarget]] = [state.grid[swapTarget], state.grid[center]];
+                }
+            }
+            
             // 初始颜色分配，防止相邻同色
             for (let i = 0; i < total; i++) {
                 assignColorForGroup(i);
@@ -1704,5 +1719,6 @@
 
     </script>
 </body>
+
 
 </html>
