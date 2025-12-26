@@ -731,18 +731,27 @@
             bottom: calc(120px + env(safe-area-inset-bottom));
         }
 
-        /* --- 横屏 & 小高度设备：压缩上下空间，利用横向宽度 --- */
-        @media (orientation: landscape),
-        (max-height: 520px) {
+        /* --- 修正后的媒体查询 --- */
 
-            /* 横屏更宽时，别死卡 480 */
+        /* 1. 针对所有横屏：只调整容器宽度，保持大按钮 */
+        @media (orientation: landscape) {
+
             #app,
             #game-view {
                 max-width: 720px;
             }
 
+            /* 让棋盘区域在横屏下大一点，避免太拥挤 */
+            #game-board-container {
+                padding: 10px;
+            }
+        }
+
+        /* 2. 只有当垂直高度真的不够时（比如手机横屏），才压缩按钮和间距 */
+        @media (max-height: 520px) {
             header {
-                padding: 14px 16px;
+                padding: 10px 16px;
+                /* 进一步压缩顶部 */
             }
 
             h1 {
@@ -755,7 +764,8 @@
             }
 
             nav {
-                height: 58px;
+                height: 50px;
+                /* 导航栏更扁 */
                 left: 6%;
                 width: 88%;
                 border-radius: 32px;
@@ -772,7 +782,7 @@
 
             .float-nav {
                 right: 10px;
-                bottom: calc(90px + env(safe-area-inset-bottom));
+                bottom: calc(80px + env(safe-area-inset-bottom));
                 gap: 8px;
             }
 
@@ -782,14 +792,14 @@
                 font-size: 16px;
             }
 
-            /* 游戏界面：减少上下 padding，让棋盘更大 */
+            /* 游戏界面压缩 */
             #game-header {
-                padding: 10px 12px;
+                padding: 6px 12px;
             }
 
             .icon-btn {
-                width: 38px;
-                height: 38px;
+                width: 36px;
+                height: 36px;
                 font-size: 16px;
             }
 
@@ -797,18 +807,14 @@
                 font-size: 14px;
             }
 
-            #game-board-container {
-                padding: 10px;
-            }
-
             #game-footer {
-                padding: 12px;
+                padding: 8px;
                 gap: 12px;
             }
 
             .btn-action {
-                padding: 10px 18px;
-                font-size: 14px;
+                padding: 8px 16px;
+                font-size: 13px;
             }
         }
     </style>
@@ -1146,6 +1152,8 @@
                 hash |= 0; // 转换为32位整数
             }
             let startOffset = Math.abs(hash) % VIBRANT_COLORS.length;
+
+            let colorIdx = 0;
 
             for (let i = 0; i < VIBRANT_COLORS.length; i++) {
                 const tryIdx = (startOffset + i) % VIBRANT_COLORS.length;
@@ -1672,9 +1680,27 @@
             loop();
         }
 
-        window.addEventListener('resize', () => {
+        let resizeRaf; // 动画帧句柄
+
+        const resizeObserver = new ResizeObserver(() => {
             if (document.getElementById('game-view').style.display === 'flex') {
-                renderBoard();
+                // 取消上一帧的请求，避免堆积
+                cancelAnimationFrame(resizeRaf);
+
+                // 请求下一帧更新，保证流畅且不卡顿
+                resizeRaf = requestAnimationFrame(() => {
+                    // 传入 true，告诉函数“只更新尺寸，别动DOM”
+                    renderBoard();
+                });
+            }
+        });
+
+        resizeObserver.observe(document.getElementById('game-board-container'));
+
+        // 移动端旋转屏幕的保险措施
+        window.addEventListener('orientationchange', () => {
+            if (document.getElementById('game-view').style.display === 'flex') {
+                setTimeout(() => renderBoard(), 300);
             }
         });
 
