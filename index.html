@@ -949,11 +949,11 @@
         </div>
 
         <div id="game-footer">
-            <button class="btn-action btn-undo" onclick="undoMove()">
-                ↩️ 撤销
-            </button>
             <button class="btn-action btn-reset" onclick="restartGame()">
                 🔄 重来
+            </button>
+            <button class="btn-action btn-undo" onclick="undoMove()">
+                ↩️ 撤销
             </button>
         </div>
     </div>
@@ -1114,7 +1114,7 @@
                     [state.grid[center], state.grid[swapTarget]] = [state.grid[swapTarget], state.grid[center]];
                 }
             }
-            
+
             // 初始颜色分配，防止相邻同色
             for (let i = 0; i < total; i++) {
                 assignColorForGroup(i);
@@ -1719,6 +1719,5 @@
 
     </script>
 </body>
-
 
 </html>
