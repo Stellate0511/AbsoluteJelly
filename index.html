@@ -1032,13 +1032,13 @@
         function saveRecord(lv, score) {
             const records = getRecords();
             const old = records[lv] || 0;
-            if (score > old) {
+            if (old === undefined || score > old) {
                 records[lv] = score;
                 localStorage.setItem(RECORD_KEY, JSON.stringify(records));
             }
         }
         function getRecord(lv) {
-            return getRecords()[lv] || 0;
+            return getRecords()[lv];
         }
 
         /* --- 4. 随机数生成器 --- */
@@ -1109,7 +1109,7 @@
                     while (swapTarget === center) {
                         swapTarget = rng.nextInt(0, 8);
                     }
-                    
+
                     // 交换
                     [state.grid[center], state.grid[swapTarget]] = [state.grid[swapTarget], state.grid[center]];
                 }
@@ -1366,7 +1366,7 @@
                     btn.className = 'level-btn';
                     btn.innerText = i;
                     const rec = allRecords[i];
-                    if (rec) {
+                    if (rec !== undefined) {
                         btn.classList.add('played');
                         if (rec >= 20) btn.classList.add('perfect');
                     }
@@ -1470,7 +1470,10 @@
         function showStartModal(lv, n, colors) {
             document.getElementById('modal-title').innerText = `第 ${lv} 关`;
             const rec = getRecord(lv);
-            document.getElementById('modal-msg').innerHTML = `最高记录: <span class="score-val">${rec}</span>`;
+            if (rec === undefined)
+                document.getElementById('modal-msg').innerHTML = `无记录`;
+            else
+                document.getElementById('modal-msg').innerHTML = `最高记录: <span class="score-val">${rec}</span>`;
             const btn = document.createElement('button');
             btn.className = 'btn-main';
             btn.innerText = '开始挑战';
@@ -1508,10 +1511,18 @@
             } else {
                 title = '🏁 关卡完成';
                 if (state.levelId) {
-                    // 如果是以前玩过的关卡
-                    subText = `<div style="font-size:14px; color:#888; margin-bottom:8px;">
-                                ${score > oldRec ? '🏆 新纪录达成!' : '历史最高: ' + oldRec}
-                            </div>`;
+                    const isFirstPlay = (oldRec === undefined);
+                    const isNewRecord = isFirstPlay || (score > oldRec);
+
+                    let historyStr = '';
+                    if (isNewRecord) {
+                        historyStr = '🏆 新纪录达成!';
+                    } else {
+                        // 此时 oldRec 一定是数字（包括0）
+                        historyStr = `历史最高: ${oldRec}`;
+                    }
+
+                    subText = `<div style="font-size:14px; color:#888; margin-bottom:8px;">${historyStr}</div>`;
                 }
             }
 
