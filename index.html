@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>减法果冻</title>
+    <style>
+        :root {
+            --text-color: #5e5e5e;
+            --accent-color: #7b68ee;
+
+            /* 毛玻璃参数 */
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.8);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            --backdrop-blur: 12px;
+
+            --radius: 24px;
+            --cell-size: 0px;
+        }
+
+        /* --- 基础重置 --- */
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: transparent;
+            /* 背景由 #bg-layer 接管 */
+            color: var(--text-color);
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            touch-action: none;
+            align-items: center;
+        }
+
+        /* --- 单一背景层，由JS实时控制颜色 --- */
+        #bg-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            pointer-events: none;
+            background: linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%);
+            /* 初始颜色 */
+            transition: background 0.1s linear;
+            /* 极短的过渡让快速滚动更顺滑 */
+        }
+
+        /* --- 滚动条美化 --- */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.6);
+        }
+
+        /* --- 通用毛玻璃面板 --- */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--backdrop-blur));
+            -webkit-backdrop-filter: blur(var(--backdrop-blur));
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: var(--radius);
+        }
+
+        /* --- 布局容器 --- */
+        #app {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            width: 100%;
+            max-width: 480px;
+            height: 100dvh;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* --- 顶部区域 --- */
+        header {
+            padding: 25px 20px;
+            text-align: center;
+            flex-shrink: 0;
+            z-index: 10;
+
+            position: relative;
+            /* 关键：作为定位基准 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- 新增 Profile 样式 --- */
+        #profile-link {
+            position: absolute;
+            left: 15px;
+            /* 靠左距离 */
+            top: 50%;
+            transform: translateY(-50%);
+            /* 垂直居中 */
+
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+
+            /* 毛玻璃胶囊样式 */
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+
+            padding: 4px 10px 4px 4px;
+            /* 右侧多留点空隙给文字 */
+            border-radius: 30px;
+            transition: transform 0.1s, background 0.2s;
+            z-index: 20;
+        }
+
+        #profile-link:active {
+            transform: translateY(-50%) scale(0.95);
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        #profile-link img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            background: #eee;
+            /* 图片未加载时的占位色 */
+        }
+
+        .profile-info {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+
+        .profile-name {
+            font-size: 16px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.1;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        /* --- 极小屏幕适配 --- */
+        /* 当屏幕宽度小于 360px 时，隐藏文字只显示头像，避免遮挡标题 */
+        @media (max-width: 360px) {
+            .profile-info {
+                display: none;
+            }
+
+            #profile-link {
+                padding: 0;
+                background: transparent;
+                border: none;
+            }
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #fff;
+            font-weight: 800;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* --- 主内容区 --- */
+        main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            padding-bottom: 110px;
+            scroll-behavior: smooth;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
+        }
+
+        /* --- 底部导航 --- */
+        nav {
+            position: absolute;
+            bottom: 30px;
+            left: 10%;
+            width: 80%;
+            height: 70px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+            border-radius: 40px;
+        }
+
+        nav.glass-panel {
+            background: var(--glass-bg);
+        }
+
+        .nav-item {
+            text-align: center;
+            opacity: 0.5;
+            transition: 0.3s;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #555;
+        }
+
+        .nav-item.active {
+            opacity: 1;
+            transform: translateY(-2px);
+            color: var(--accent-color);
+        }
+
+        .nav-icon {
+            font-size: 22px;
+            margin-bottom: 4px;
+        }
+
+        /* --- 视图切换 --- */
+        .view {
+            display: none;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* --- 关卡列表 --- */
+        .level-section {
+            margin-bottom: 40px;
+            scroll-margin-top: 20px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            color: #fff;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            padding: 10px 0;
+        }
+
+        .section-badge {
+            background: rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+            backdrop-filter: blur(4px);
+        }
+
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 12px;
+        }
+
+        .level-btn {
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.1s;
+            color: #666;
+        }
+
+        .level-btn:active {
+            transform: scale(0.95);
+        }
+
+        .level-btn.played {
+            background: #E3F2FD;
+            color: #1E88E5;
+            border-color: #BBDEFB;
+        }
+
+        .level-btn.perfect {
+            background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%);
+            color: #F57F17;
+            border-color: #FFD54F;
+            box-shadow: 0 2px 8px rgba(255, 193, 7, 0.4);
+        }
+
+        /* --- 快速导航悬浮栏 --- */
+        .float-nav {
+            position: absolute;
+            right: 15px;
+            bottom: 120px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 90;
+        }
+
+        .float-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            color: var(--accent-color);
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .float-btn:active {
+            transform: scale(0.9);
+            background: #fff;
+        }
+
+        /* --- 实验室面板 --- */
+        .lab-panel {
+            padding: 35px 25px;
+            text-align: center;
+        }
+
+        .control-group {
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #555;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            background: #f0f2f5;
+            border-radius: 14px;
+            font-size: 16px;
+            outline: none;
+            color: #333;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-color);
+        }
+
+        .btn-main {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            border-radius: 35px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(123, 104, 238, 0.3);
+            transition: transform 0.1s;
+            width: 100%;
+            letter-spacing: 1px;
+        }
+
+        .btn-main:active {
+            transform: scale(0.98);
+        }
+
+        /* --- 弹窗 --- */
+        #modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100dvh;
+            background: rgba(0, 0, 0, 0.25);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .modal-card {
+            background: rgba(255, 255, 255, 0.95);
+            width: 80%;
+            max-width: 320px;
+            border-radius: 30px;
+            padding: 35px 25px;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8) translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 26px;
+            cursor: pointer;
+            color: #bbb;
+            padding: 5px;
+        }
+
+        /* --- 游戏界面 --- */
+        #game-view {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 480px;
+            height: 100dvh;
+            background: #a1c4fd;
+            /* 默认 */
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.1);
+            transition: background 0.3s ease;
+        }
+
+        @media (max-width: 480px) {
+            #game-view {
+                box-shadow: none;
+            }
+        }
+
+        #game-header {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .status-text {
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
+
+        #game-board-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* --- 核心游戏盘 --- */
+        #game-board {
+            display: grid;
+            gap: 0;
+            padding: 0;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .cell {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 26px;
+            font-weight: 700;
+            cursor: pointer;
+            position: relative;
+            box-sizing: border-box;
+            border-radius: 50%;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+            transition: filter 0.15s ease, border-radius 0.2s ease;
+            z-index: 1;
+        }
+
+        .cell.selected {
+            filter: brightness(1.15);
+            z-index: 10;
+        }
+
+        .cell.selected::after {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border-radius: inherit;
+            border: 3px solid rgba(255, 255, 255, 0.7);
+            pointer-events: none;
+            animation: breathe 1.5s infinite alternate;
+        }
+
+        @keyframes breathe {
+            from {
+                opacity: 0.6;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .cell.target {
+            animation: softPulse 1.2s infinite;
+        }
+
+        @keyframes softPulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .cell.c-top {
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+        }
+
+        .cell.c-bottom {
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .cell.c-left {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .cell.c-right {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        #game-footer {
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .btn-action {
+            padding: 14px 28px;
+            border-radius: 30px;
+            border: none;
+            font-weight: 700;
+            color: white;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            font-size: 15px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .btn-action:active {
+            transform: scale(0.95);
+        }
+
+        .btn-undo {
+            background: #FFB74D;
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: #fff;
+            color: #777;
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 3000;
+        }
+
+        /* --- 教程面板样式 --- */
+        .tutorial-panel {
+            padding: 30px 25px;
+            color: #555;
+            line-height: 1.8;
+            /* 增加行高提高可读性 */
+            text-align: left;
+        }
+
+        .t-section {
+            margin-bottom: 30px;
+        }
+
+        .t-section h3 {
+            color: var(--accent-color);
+            margin: 0 0 12px 0;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .t-section p {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+        }
+
+        .t-section ul {
+            margin: 5px 0 0 20px;
+            padding: 0;
+        }
+
+        .t-section li {
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .highlight-box {
+            background: rgba(123, 104, 238, 0.1);
+            padding: 10px 15px;
+            border-radius: 12px;
+            color: var(--accent-color);
+            font-weight: bold;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        /* --- 让底部导航/悬浮按钮适配刘海/手势条 --- */
+        main {
+            padding-bottom: calc(110px + env(safe-area-inset-bottom));
+        }
+
+        nav {
+            bottom: calc(30px + env(safe-area-inset-bottom));
+        }
+
+        .float-nav {
+            bottom: calc(120px + env(safe-area-inset-bottom));
+        }
+
+        /* --- 横屏 & 小高度设备：压缩上下空间，利用横向宽度 --- */
+        @media (orientation: landscape),
+        (max-height: 520px) {
+
+            /* 横屏更宽时，别死卡 480 */
+            #app,
+            #game-view {
+                max-width: 720px;
+            }
+
+            header {
+                padding: 14px 16px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            main {
+                padding: 14px;
+                padding-bottom: calc(85px + env(safe-area-inset-bottom));
+            }
+
+            nav {
+                height: 58px;
+                left: 6%;
+                width: 88%;
+                border-radius: 32px;
+            }
+
+            .nav-icon {
+                font-size: 20px;
+                margin-bottom: 2px;
+            }
+
+            .nav-item {
+                font-size: 12px;
+            }
+
+            .float-nav {
+                right: 10px;
+                bottom: calc(90px + env(safe-area-inset-bottom));
+                gap: 8px;
+            }
+
+            .float-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+
+            /* 游戏界面：减少上下 padding，让棋盘更大 */
+            #game-header {
+                padding: 10px 12px;
+            }
+
+            .icon-btn {
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
+
+            .status-text {
+                font-size: 14px;
+            }
+
+            #game-board-container {
+                padding: 10px;
+            }
+
+            #game-footer {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            .btn-action {
+                padding: 10px 18px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- 单一背景层，颜色动态插值 -->
+    <div id="bg-layer"></div>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <div id="app">
+        <header>
+            <a id="profile-link" href="/">
+                <img src="/avatar.jpg" alt="Avatar">
+                <div class="profile-info">
+                    <span class="profile-name">回到主页</span>
+                </div>
+            </a>
+            <h1>减法果冻</h1>
+        </header>
+
+        <main id="main-scroll">
+            <!-- 冒险模式 -->
+            <div id="view-adventure" class="view active">
+                <div id="level-list-container"></div>
+            </div>
+
+            <!-- 实验室模式 -->
+            <div id="view-lab" class="view">
+                <div class="glass-panel lab-panel">
+                    <h2 style="margin-top:0; color:var(--text-color); font-size: 18px;">实验室</h2>
+
+                    <div class="control-group">
+                        <label>方阵大小: <span id="size-display" style="color:var(--accent-color)">3</span> x <span
+                                id="size-display-2">3</span></label>
+                        <input type="range" id="input-n" min="3" max="10" value="3">
+                    </div>
+
+                    <div class="control-group">
+                        <label>世界种子 (Seed):</label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" id="input-seed" value="Gummy">
+                            <button class="icon-btn" onclick="randomizeSeed()"
+                                style="border-radius:14px; width: 50px;">🎲</button>
+                        </div>
+                    </div>
+
+                    <button class="btn-main" onclick="startLabGame()">生成关卡</button>
+                </div>
+            </div>
+
+            <!-- 教程 -->
+            <div id="view-tutorial" class="view">
+                <div class="glass-panel tutorial-panel">
+                    <h2 style="margin-top:0; text-align:center; margin-bottom:25px; color:var(--text-color)">📖 玩法教程
+                    </h2>
+
+                    <div class="t-section">
+                        <h3>目标</h3>
+                        <p>把所有果冻块合成 <b>一整块</b>。</p>
+                        <p>合成完成时，最终数字就是你的得分：</p>
+                        <ul>
+                            <li><span style="color:#F57F17; font-weight:bold">20</span> = 完美目标</li>
+                            <li>不是 20 也算完成，可以继续挑战更高得分</li>
+                        </ul>
+                    </div>
+
+                    <div class="t-section">
+                        <h3>怎么合并</h3>
+                        <p>你只能合并 <b>相邻</b>（上下左右挨着）的两块。</p>
+                        <p>两种操作任选其一：</p>
+                        <ul>
+                            <li><b>滑动合并：</b>从一块上按住滑到另一块上松手</li>
+                            <li><b>点击合并：</b>依次点击两块</li>
+                        </ul>
+                    </div>
+
+                    <div class="t-section">
+                        <h3>运算规则</h3>
+                        <p>相邻两块合并后会变成一块，数值计算规则为：</p>
+                        <div class="highlight-box">
+                            大数 - 小数 = 新数字
+                        </div>
+                        <p style="font-size:12px; color:#999; text-align:center; margin-top:5px">即：两数之差的绝对值</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 悬浮导航栏 -->
+        <div class="float-nav" id="float-nav">
+            <div class="float-btn" onclick="scrollSection(-1)">▲</div>
+            <div class="float-btn" onclick="scrollSection(1)">▼</div>
+        </div>
+
+        <!-- 底部导航 -->
+        <nav class="glass-panel">
+            <div class="nav-item active" onclick="switchTab('adventure')">
+                <span class="nav-icon">🗺️</span>冒险
+            </div>
+            <div class="nav-item" onclick="switchTab('lab')">
+                <span class="nav-icon">🧪</span>实验室
+            </div>
+            <div class="nav-item" onclick="switchTab('tutorial')">
+                <span class="nav-icon">📖</span>教程
+            </div>
+        </nav>
+    </div>
+
+    <!-- 弹窗 -->
+    <div id="modal-overlay">
+        <div class="modal-card">
+            <span class="modal-close" onclick="closeModal()">×</span>
+            <div class="modal-title" id="modal-title"
+                style="font-size:24px; font-weight:800; margin-bottom:10px; color:var(--accent-color)">第 1 关</div>
+            <div class="modal-score" id="modal-msg" style="color:#888; margin-bottom:25px;">最高记录: <span
+                    class="score-val" id="modal-score" style="font-weight:bold; color:#444">--</span></div>
+            <div id="modal-buttons" style="display:flex; flex-direction:column; gap:12px;"></div>
+        </div>
+    </div>
+
+    <!-- 游戏界面 -->
+    <div id="game-view">
+        <div id="game-header">
+            <button class="icon-btn" onclick="exitGame()">🏠</button>
+            <div class="status-text" id="game-info-display"
+                style="font-size:18px; font-weight:800; color:#fff; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+                --
+            </div>
+        </div>
+
+        <div id="game-board-container">
+            <div id="game-board">
+                <!-- 格子动态生成 -->
+            </div>
+        </div>
+
+        <div id="game-footer">
+            <button class="btn-action btn-undo" onclick="undoMove()">
+                ↩️ 撤销
+            </button>
+            <button class="btn-action btn-reset" onclick="restartGame()">
+                🔄 重来
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* --- 1. 配置：将颜色拆分为 Start/End 方便插值 --- */
+        const SECTIONS = [
+            { title: "3x3 入门", n: 3, start: 1, end: 100, colors: ['#a1c4fd', '#c2e9fb'] },
+            { title: "4x4 进阶", n: 4, start: 101, end: 200, colors: ['#d4fc79', '#96e6a1'] },
+            { title: "5x5 挑战", n: 5, start: 201, end: 300, colors: ['#fccb90', '#d57eeb'] },
+            { title: "6x6 烧脑", n: 6, start: 301, end: 400, colors: ['#e0c3fc', '#8ec5fc'] },
+            { title: "7x7 大师", n: 7, start: 401, end: 500, colors: ['#ff9a9e', '#fecfef'] },
+            { title: "8x8 宗师", n: 8, start: 501, end: 600, colors: ['#f093fb', '#f5576c'] },
+            { title: "9x9 巅峰", n: 9, start: 601, end: 700, colors: ['#4facfe', '#00f2fe'] }
+        ];
+
+        const VIBRANT_COLORS = [
+            '#FF7675', '#74B9FF', '#55E6C1', '#A29BFE', '#FAB1A0',
+            '#FD79A8', '#00CEC9', '#6C5CE7', '#0984E3', '#00B894'
+        ];
+
+        /* --- 2. 颜色处理工具函数 --- */
+        function hexToRgb(hex) {
+            let r = 0, g = 0, b = 0;
+            if (hex.length === 4) {
+                r = parseInt("0x" + hex[1] + hex[1]);
+                g = parseInt("0x" + hex[2] + hex[2]);
+                b = parseInt("0x" + hex[3] + hex[3]);
+            } else if (hex.length === 7) {
+                r = parseInt("0x" + hex[1] + hex[2]);
+                g = parseInt("0x" + hex[3] + hex[4]);
+                b = parseInt("0x" + hex[5] + hex[6]);
+            }
+            return { r, g, b };
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (Math.round(r) << 16) + (Math.round(g) << 8) + Math.round(b)).toString(16).slice(1);
+        }
+
+        // 线性插值
+        function lerp(start, end, t) {
+            return start * (1 - t) + end * t;
+        }
+
+        // 颜色插值
+        function lerpColor(hex1, hex2, t) {
+            const c1 = hexToRgb(hex1);
+            const c2 = hexToRgb(hex2);
+            const r = lerp(c1.r, c2.r, t);
+            const g = lerp(c1.g, c2.g, t);
+            const b = lerp(c1.b, c2.b, t);
+            return rgbToHex(r, g, b);
+        }
+
+        /* --- 3. 游戏状态 & 数据 --- */
+        let state = {
+            n: 3,
+            seed: null,
+            levelId: null,
+            grid: [],
+            groups: [],
+            groupColors: {}, // 存储每个group的颜色索引，防止相邻同色
+            history: [],
+            selectedGroup: null,
+            dragStartGroup: null,
+            active: false
+        };
+
+        const RECORD_KEY = 'blob_records';
+        function getRecords() {
+            try {
+                return JSON.parse(localStorage.getItem(RECORD_KEY) || '{}');
+            } catch (e) { return {}; }
+        }
+        function saveRecord(lv, score) {
+            const records = getRecords();
+            const old = records[lv] || 0;
+            if (score > old) {
+                records[lv] = score;
+                localStorage.setItem(RECORD_KEY, JSON.stringify(records));
+            }
+        }
+        function getRecord(lv) {
+            return getRecords()[lv] || 0;
+        }
+
+        /* --- 4. 随机数生成器 --- */
+        class Random {
+            constructor(seed) {
+                let h = 0x811c9dc5;
+                const str = seed.toString();
+                for (let i = 0; i < str.length; i++) {
+                    h ^= str.charCodeAt(i);
+                    h = Math.imul(h, 0x01000193);
+                }
+                this.seed = h >>> 0;
+            }
+            nextInt(min, max) {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                const rnd = this.seed / 233280;
+                return Math.floor(rnd * (max - min + 1)) + min;
+            }
+        }
+
+        /* --- 5. 核心逻辑 --- */
+        function initGame(n, seed, levelId = null) {
+            state.n = n;
+            state.seed = seed;
+            state.levelId = levelId;
+            state.history = [];
+            state.selectedGroup = null;
+            state.dragStartGroup = null;
+            state.active = true;
+            state.groupColors = {};
+
+            const titleEl = document.getElementById('game-info-display');
+            if (state.levelId) {
+                titleEl.innerText = `第 ${state.levelId} 关`;
+            } else {
+                // 如果种子字符串太长，截取前8位显示，避免挤压UI
+                const seedText = state.seed.length > 8 ? state.seed.substring(0, 8) + '..' : state.seed;
+                titleEl.innerText = `自定义: ${seedText}`;
+            }
+
+            const rng = new Random(seed);
+            const total = n * n;
+
+            state.grid = [];
+            state.groups = [];
+
+            for (let i = 0; i < total; i++) {
+                state.grid.push(rng.nextInt(0, 20));
+                state.groups.push(i);
+            }
+
+            const luckyIndex = rng.nextInt(0, total - 1);
+            state.grid[luckyIndex] = 20;
+
+            let sum = state.grid.reduce((a, b) => a + b, 0);
+            if (sum % 2 !== 0) {
+                let adjustIndex = (luckyIndex + 1) % total;
+                if (state.grid[adjustIndex] > 0) state.grid[adjustIndex]--;
+                else state.grid[adjustIndex]++;
+            }
+
+            // 初始颜色分配，防止相邻同色
+            for (let i = 0; i < total; i++) {
+                assignColorForGroup(i);
+            }
+
+            renderBoard();
+            updateUI();
+        }
+
+        // 为 Group 分配一个不与邻居冲突的颜色
+        function assignColorForGroup(gId) {
+            const neighbors = getNeighbors(gId);
+            const usedColors = new Set();
+            neighbors.forEach(nId => {
+                if (state.groupColors[nId] !== undefined) {
+                    usedColors.add(state.groupColors[nId]);
+                }
+            });
+
+            const key = String(state.seed) + ':' + gId;
+            let hash = 0;
+            for (let i = 0; i < key.length; i++) {
+                hash = (hash << 5) - hash + key.charCodeAt(i);
+                hash |= 0; // 转换为32位整数
+            }
+            let startOffset = Math.abs(hash) % VIBRANT_COLORS.length;
+
+            for (let i = 0; i < VIBRANT_COLORS.length; i++) {
+                const tryIdx = (startOffset + i) % VIBRANT_COLORS.length;
+                if (!usedColors.has(tryIdx)) {
+                    colorIdx = tryIdx;
+                    break;
+                }
+            }
+            state.groupColors[gId] = colorIdx;
+        }
+
+        function saveHistory() {
+            state.history.push({
+                grid: [...state.grid],
+                groups: [...state.groups],
+                groupColors: { ...state.groupColors } // 颜色也需要保存
+            });
+            if (state.history.length > 20) state.history.shift();
+        }
+
+        function undoMove() {
+            if (state.history.length === 0) return;
+            const prev = state.history.pop();
+            state.grid = prev.grid;
+            state.groups = prev.groups;
+            state.groupColors = prev.groupColors;
+            state.selectedGroup = null;
+            renderBoard();
+            updateUI();
+        }
+
+        function getNeighbors(gId) {
+            const neighbors = new Set();
+            const n = state.n;
+            for (let i = 0; i < n * n; i++) {
+                if (state.groups[i] !== gId) continue;
+                const r = Math.floor(i / n), c = i % n;
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < n && nc >= 0 && nc < n) {
+                        const ng = state.groups[nr * n + nc];
+                        if (ng !== gId) neighbors.add(ng);
+                    }
+                });
+            }
+            return neighbors;
+        }
+
+        function tryMerge(g1, g2) {
+            if (g1 === g2) return false;
+            const neighbors = getNeighbors(g1);
+            if (neighbors.has(g2)) {
+                saveHistory();
+                const idx1 = state.groups.indexOf(g1);
+                const idx2 = state.groups.indexOf(g2);
+                const val = Math.abs(state.grid[idx1] - state.grid[idx2]);
+                const targetG = Math.min(g1, g2);
+                const sourceG = Math.max(g1, g2);
+
+                for (let i = 0; i < state.groups.length; i++) {
+                    if (state.groups[i] === sourceG || state.groups[i] === targetG) {
+                        state.groups[i] = targetG;
+                        state.grid[i] = val;
+                    }
+                }
+
+                // 合并后重新分配 targetG 的颜色，确保不与新邻居冲突
+                assignColorForGroup(targetG);
+
+                state.selectedGroup = null;
+                renderBoard();
+                updateUI();
+                checkWin();
+                return true;
+            }
+            return false;
+        }
+
+        function checkWin() {
+            const unique = new Set(state.groups);
+            if (unique.size === 1) {
+                state.active = false;
+                const score = state.grid[0];
+                let oldRec = 0;
+                if (state.levelId) {
+                    oldRec = getRecord(state.levelId);
+                }
+                setTimeout(() => {
+                    fireConfetti();
+                    showWinModal(score, oldRec);
+                    if (state.levelId) saveRecord(state.levelId, score);
+                }, 300);
+            }
+        }
+
+        /* --- 6. 渲染与交互 --- */
+        function renderBoard() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = '';
+            const n = state.n;
+
+            const container = document.getElementById('game-board-container');
+            const cs = getComputedStyle(container);
+            const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+            const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+
+            const maxW = container.clientWidth - padX;
+            const maxH = container.clientHeight - padY;
+
+            // 留一点点余量，避免四舍五入导致刚好溢出
+            const size = Math.max(0, Math.min(maxW, maxH) - 4);
+
+            // 给个最小格子尺寸，避免太小看不清（可按需调 16/18/20）
+            const cellSize = Math.max(16, Math.floor(size / n));
+
+            document.documentElement.style.setProperty('--cell-size', cellSize + 'px');
+            board.style.gridTemplateColumns = `repeat(${n}, ${cellSize}px)`;
+            board.style.gridTemplateRows = `repeat(${n}, ${cellSize}px)`;
+            board.style.width = (cellSize * n) + 'px';
+            board.style.height = (cellSize * n) + 'px';
+
+            for (let i = 0; i < n * n; i++) {
+                const gId = state.groups[i];
+                const val = state.grid[i];
+                const r = Math.floor(i / n);
+                const c = i % n;
+
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.innerText = val;
+
+                const fontSize = Math.max(12, Math.floor(cellSize * 0.45));
+                cell.style.fontSize = fontSize + 'px';
+
+                cell.dataset.index = i;
+                cell.dataset.group = gId;
+
+                // 使用 groupColors 中存储的颜色索引
+                const colorIdx = state.groupColors[gId] !== undefined ? state.groupColors[gId] : (gId % VIBRANT_COLORS.length);
+                const color = VIBRANT_COLORS[colorIdx];
+                cell.style.backgroundColor = color;
+                cell.style.boxShadow = `0 0 0 0.5px ${color}`;
+
+                if (state.selectedGroup === gId) cell.classList.add('selected');
+                if (state.selectedGroup !== null && getNeighbors(state.selectedGroup).has(gId)) {
+                    cell.classList.add('target');
+                }
+
+                if (r > 0 && state.groups[(r - 1) * n + c] === gId) cell.classList.add('c-top');
+                if (r < n - 1 && state.groups[(r + 1) * n + c] === gId) cell.classList.add('c-bottom');
+                if (c > 0 && state.groups[r * n + (c - 1)] === gId) cell.classList.add('c-left');
+                if (c < n - 1 && state.groups[r * n + (c + 1)] === gId) cell.classList.add('c-right');
+
+                board.appendChild(cell);
+            }
+
+            board.onpointerdown = handlePointerDown;
+            board.onpointerup = handlePointerUp;
+            board.ontouchstart = (e) => e.preventDefault();
+            board.ontouchmove = (e) => e.preventDefault();
+        }
+
+        let isDragging = false;
+        let dragStartEl = null;
+
+        function handlePointerDown(e) {
+            if (!state.active) return;
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            if (!target || !target.classList.contains('cell')) return;
+
+            isDragging = true;
+            dragStartEl = target;
+            const gId = parseInt(target.dataset.group);
+            state.dragStartGroup = gId;
+        }
+
+        function handlePointerUp(e) {
+            if (!isDragging || !state.active) return;
+            isDragging = false;
+
+            const upTarget = document.elementFromPoint(e.clientX, e.clientY);
+            if (upTarget && upTarget.classList.contains('cell')) {
+                const startG = state.dragStartGroup;
+                const endG = parseInt(upTarget.dataset.group);
+
+                if (startG !== endG) {
+                    if (tryMerge(startG, endG)) return;
+                }
+                if (startG === endG) handleClick(startG);
+            }
+            state.dragStartGroup = null;
+        }
+
+        function handleClick(gId) {
+            if (state.selectedGroup === null) state.selectedGroup = gId;
+            else if (state.selectedGroup === gId) state.selectedGroup = null;
+            else if (!tryMerge(state.selectedGroup, gId)) state.selectedGroup = gId;
+            renderBoard();
+        }
+
+        function updateUI() {
+            //const unique = new Set(state.groups);
+            //document.getElementById('block-count').innerText = unique.size;
+        }
+
+        /* --- 7. UI & 流程 --- */
+        function initLevelList() {
+            const container = document.getElementById('level-list-container');
+            container.innerHTML = '';
+            const allRecords = getRecords();
+
+            SECTIONS.forEach((sec, index) => {
+                const div = document.createElement('div');
+                div.className = 'level-section';
+                div.id = `section-${index}`;
+                div.dataset.index = index;
+                div.innerHTML = `<div class="section-title">${sec.title} <span class="section-badge">${sec.n}x${sec.n}</span></div>`;
+                const grid = document.createElement('div');
+                grid.className = 'level-grid';
+
+                for (let i = sec.start; i <= sec.end; i++) {
+                    const btn = document.createElement('div');
+                    btn.className = 'level-btn';
+                    btn.innerText = i;
+                    const rec = allRecords[i];
+                    if (rec) {
+                        btn.classList.add('played');
+                        if (rec >= 20) btn.classList.add('perfect');
+                    }
+                    btn.onclick = () => showStartModal(i, sec.n, sec.colors);
+                    grid.appendChild(btn);
+                }
+                div.appendChild(grid);
+                container.appendChild(div);
+            });
+
+            const scrollContainer = document.getElementById('main-scroll');
+            scrollContainer.addEventListener('scroll', handleScroll);
+            handleScroll();
+        }
+
+        // --- 核心：基于滚动位置的颜色插值 (修复边界跳变) ---
+        function handleScroll() {
+            const scrollContainer = document.getElementById('main-scroll');
+            const sections = document.querySelectorAll('.level-section');
+            if (sections.length === 0) return;
+
+            const scrollTop = scrollContainer.scrollTop;
+            const centerLine = scrollTop + scrollContainer.clientHeight / 2;
+            let currentIndex = 0;
+
+            for (let i = 0; i < sections.length; i++) {
+                const section = sections[i];
+                const top = section.offsetTop;
+                const bottom = top + section.clientHeight;
+                if (centerLine < bottom) {
+                    currentIndex = i;
+                    break;
+                }
+                if (i === sections.length - 1) currentIndex = i;
+            }
+
+            let interpIndex = 0;
+            for (let i = 0; i < sections.length; i++) {
+                if (sections[i].offsetTop > scrollTop) {
+                    interpIndex = i - 1;
+                    break;
+                }
+                if (i === sections.length - 1) interpIndex = i;
+            }
+            if (interpIndex < 0) interpIndex = 0;
+
+            let nextIndex = interpIndex + 1;
+            if (nextIndex >= SECTIONS.length) nextIndex = SECTIONS.length - 1;
+
+            const currentEl = sections[interpIndex];
+            const nextEl = sections[nextIndex];
+            const currentConfig = SECTIONS[interpIndex];
+            const nextConfig = SECTIONS[nextIndex];
+
+            let t = 0;
+            if (currentEl && nextEl && interpIndex !== nextIndex) {
+                const startY = currentEl.offsetTop;
+                const endY = nextEl.offsetTop;
+                const dist = endY - startY;
+                if (dist > 0) {
+                    t = (scrollTop - startY) / dist;
+                }
+            }
+            t = Math.max(0, Math.min(1, t));
+
+            const c1 = lerpColor(currentConfig.colors[0], nextConfig.colors[0], t);
+            const c2 = lerpColor(currentConfig.colors[1], nextConfig.colors[1], t);
+
+            const newGradient = `linear-gradient(120deg, ${c1} 0%, ${c2} 100%)`;
+            document.getElementById('bg-layer').style.background = newGradient;
+        }
+
+        window.scrollSection = (direction) => {
+            const scrollContainer = document.getElementById('main-scroll');
+            const scrollTop = scrollContainer.scrollTop;
+            const sections = document.querySelectorAll('.level-section');
+
+            const viewCenter = scrollTop + scrollContainer.clientHeight / 2;
+            let currentIdx = 0;
+
+            for (let i = 0; i < sections.length; i++) {
+                const sec = sections[i];
+                const top = sec.offsetTop;
+                const bottom = top + sec.clientHeight;
+                if (bottom > viewCenter) {
+                    currentIdx = i;
+                    break;
+                }
+            }
+
+            let targetIdx = currentIdx + direction;
+            if (targetIdx < 0) targetIdx = 0;
+            if (targetIdx >= SECTIONS.length) targetIdx = SECTIONS.length - 1;
+
+            sections[targetIdx].scrollIntoView({ behavior: 'smooth' });
+        };
+
+        const modal = document.getElementById('modal-overlay');
+        function closeModal() { modal.style.display = 'none'; }
+
+        function showStartModal(lv, n, colors) {
+            document.getElementById('modal-title').innerText = `第 ${lv} 关`;
+            const rec = getRecord(lv);
+            document.getElementById('modal-msg').innerHTML = `最高记录: <span class="score-val">${rec}</span>`;
+            const btn = document.createElement('button');
+            btn.className = 'btn-main';
+            btn.innerText = '开始挑战';
+            btn.onclick = () => startLevel(lv, n, colors);
+
+            const btnContainer = document.getElementById('modal-buttons');
+            btnContainer.innerHTML = '';
+            btnContainer.appendChild(btn);
+
+            modal.style.display = 'flex';
+        }
+
+        function goToNextLevel() {
+            const nextId = state.levelId + 1;
+            // 在配置中查找下一关属于哪个 Section，以获取对应的 N 和 颜色
+            const sec = SECTIONS.find(s => nextId >= s.start && nextId <= s.end);
+
+            if (sec) {
+                startLevel(nextId, sec.n, sec.colors);
+            } else {
+                // 如果找不到配置（通关了），则返回主页
+                closeModal();
+                exitGame();
+            }
+        }
+
+        function showWinModal(score, oldRec) {
+            // 修改：根据分数决定标题和副标题
+            let title = '';
+            let subText = '';
+
+            if (score === 20) {
+                title = '🎉 完美通关!';
+                subText = `<div style="font-size:16px; color:#F57F17; font-weight:bold; margin-bottom:8px;">🌟 达成最高目标!</div>`;
+            } else {
+                title = '🏁 关卡完成';
+                if (state.levelId) {
+                    // 如果是以前玩过的关卡
+                    subText = `<div style="font-size:14px; color:#888; margin-bottom:8px;">
+                                ${score > oldRec ? '🏆 新纪录达成!' : '历史最高: ' + oldRec}
+                            </div>`;
+                }
+            }
+
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-msg').innerHTML = `
+            ${subText}
+            <div style="font-size:14px; color:#aaa;">本次得分</div>
+            <span class="score-val" style="font-size:40px; color:var(--accent-color)">${score}</span>
+            `;
+
+            let nextBtn = '';
+            // 700 是代码中定义的最后一关 (SECTIONS配置)
+            if (state.levelId && state.levelId < 700) {
+                nextBtn = `<button class="btn-main" style="background:#4facfe; margin-top:5px" onclick="goToNextLevel()">下一关</button>`;
+            }
+
+            document.getElementById('modal-buttons').innerHTML = `
+            <button class="btn-main" onclick="closeModal(); exitGame()">返回主页</button>
+            <button class="btn-main" style="background:#8ec5fc; margin-top:5px" onclick="closeModal(); restartGame()">再玩一次</button>
+            ${nextBtn}
+            `;
+
+            modal.style.display = 'flex';
+        }
+
+        function startLevel(lv, n, colors) {
+            closeModal();
+            const gv = document.getElementById('game-view');
+            gv.style.display = 'flex';
+            gv.style.background = `linear-gradient(120deg, ${colors[0]} 0%, ${colors[1]} 100%)`;
+
+            window.history.pushState({}, '', `?type=adventure&lv=${lv}`);
+
+            initGame(n, lv, lv);
+            requestAnimationFrame(renderBoard);
+        }
+
+        function startLabGame() {
+            const n = parseInt(document.getElementById('input-n').value);
+            const seed = document.getElementById('input-seed').value || 'random';
+            const gv = document.getElementById('game-view');
+            gv.style.display = 'flex';
+            gv.style.background = 'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)';
+
+            window.history.pushState({}, '', `?type=lab&size=${n}&seed=${seed}`);
+
+            initGame(n, seed, null);
+            requestAnimationFrame(renderBoard);
+        }
+
+        function exitGame() {
+            document.getElementById('game-view').style.display = 'none';
+
+            // 自动获取当前视图类型：view-lab -> lab, view-adventure -> adventure
+            const activeView = document.querySelector('.view.active').id;
+            const typeParam = activeView.replace('view-', '');
+
+            window.history.pushState({}, '', `?type=${typeParam}`);
+
+            const scrollContainer = document.getElementById('main-scroll');
+            const scrollTop = scrollContainer.scrollTop;
+            initLevelList();
+            scrollContainer.scrollTop = scrollTop;
+            handleScroll();
+        }
+
+        function restartGame() {
+            initGame(state.n, state.seed, state.levelId);
+        }
+
+        window.switchTab = (tab) => {
+            // 1. 切换视图 (HTML ID 需匹配: view-adventure, view-lab, view-tutorial)
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${tab}`).classList.add('active');
+
+            // 2. 底部导航高亮
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+
+            // 统一索引：adventure=0, lab=1, tutorial=2
+            const tabIndexMap = { 'adventure': 0, 'lab': 1, 'tutorial': 2 };
+            if (navItems[tabIndexMap[tab]]) {
+                navItems[tabIndexMap[tab]].classList.add('active');
+            }
+
+            // 3. 更新 URL (直接使用 tab 名称)
+            const newUrl = `?type=${tab}`;
+            if (window.location.search !== newUrl) {
+                window.history.replaceState({}, '', newUrl);
+            }
+
+            // 4. 背景逻辑
+            const floatNav = document.getElementById('float-nav');
+            if (tab === 'adventure') {
+                floatNav.style.display = 'flex';
+                handleScroll();
+            } else {
+                floatNav.style.display = 'none';
+                document.getElementById('bg-layer').style.background = 'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)';
+            }
+        };
+
+        document.getElementById('input-n').addEventListener('input', e => {
+            document.getElementById('size-display').innerText = e.target.value;
+            document.getElementById('size-display-2').innerText = e.target.value;
+        });
+
+        window.randomizeSeed = () => {
+            document.getElementById('input-seed').value = Math.random().toString(36).substring(7).toUpperCase();
+        }
+
+        function fireConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const pieces = [];
+            for (let i = 0; i < 120; i++) {
+                pieces.push({
+                    x: canvas.width / 2, y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 12, vy: (Math.random() - 1) * 12,
+                    c: VIBRANT_COLORS[Math.floor(Math.random() * VIBRANT_COLORS.length)],
+                    s: Math.random() * 8 + 4
+                });
+            }
+
+            let frames = 0;
+            function loop() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                let active = false;
+                pieces.forEach(p => {
+                    p.x += p.vx; p.y += p.vy; p.vy += 0.3;
+                    ctx.fillStyle = p.c;
+                    ctx.fillRect(p.x, p.y, p.s, p.s);
+                    if (p.y < canvas.height) active = true;
+                });
+                frames++;
+                if (active && frames < 200) requestAnimationFrame(loop);
+                else ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            loop();
+        }
+
+        window.addEventListener('resize', () => {
+            if (document.getElementById('game-view').style.display === 'flex') {
+                renderBoard();
+            }
+        });
+
+        function initFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const type = params.get('type');
+
+            // 如果 URL 是 ?type=custom，强制修正为 lab (兼容旧链接)
+            const targetTab = type === 'custom' ? 'lab' : type;
+
+            const lv = parseInt(params.get('lv'));
+            const size = parseInt(params.get('size'));
+            const seed = params.get('seed');
+
+            // 1. 冒险模式关卡
+            if (targetTab === 'adventure' && lv) {
+                switchTab('adventure');
+                const sec = SECTIONS.find(s => lv >= s.start && lv <= s.end);
+                if (sec) {
+                    // 启动游戏界面
+                    startLevel(lv, sec.n, sec.colors);
+
+                    // 然后将列表滚动到对应区域，确保背景色 (#bg-layer) 正确
+                    setTimeout(() => {
+                        const secIdx = SECTIONS.indexOf(sec);
+                        const sectionEl = document.getElementById(`section-${secIdx}`);
+                        if (sectionEl) {
+                            sectionEl.scrollIntoView(); // 滚动列表到该区域
+                            handleScroll();             // 强制计算一次背景色
+                        }
+                    }, 100);
+                }
+                return;
+            }
+
+            // 2. 实验室模式 (直接用 lab)
+            if (targetTab === 'lab' && size && seed) {
+                switchTab('lab');
+                document.getElementById('input-n').value = size;
+                document.getElementById('input-seed').value = seed;
+                document.getElementById('size-display').innerText = size;
+                document.getElementById('size-display-2').innerText = size;
+                startLabGame();
+                return;
+            }
+
+            // 3. 仅切换 Tab
+            if (['lab', 'tutorial'].includes(targetTab)) {
+                switchTab(targetTab);
+            } else {
+                switchTab('adventure'); // 默认
+            }
+        }
+
+
+        initLevelList();
+        initFromUrl();
+
+    </script>
+</body>
+
+</html>
