@@ -565,6 +565,18 @@
             z-index: 1;
         }
 
+        /* --- 新增：数字 20 的专属金色样式 --- */
+        .cell.is-twenty {
+            /* 金色渐变背景，使用 !important 覆盖 JS 设置的动态颜色 */
+            background: #FFE700 !important;
+            /* 深褐色文字，与金色形成高对比 */
+            color: #7c4d00 !important;
+            font-weight: 800;
+            /* 文字增加白色描边感，更立体 */
+            text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 0 0.5px #FFE700 !important;
+        }
+
         .cell.selected {
             filter: brightness(1.15);
             z-index: 10;
@@ -578,6 +590,10 @@
             border: 3px solid rgba(255, 255, 255, 0.7);
             pointer-events: none;
             animation: breathe 1.5s infinite alternate;
+        }
+
+        .cell.is-twenty.selected::after {
+            border: 3px solid rgba(124, 77, 0, 0.7) !important;
         }
 
         @keyframes breathe {
@@ -1453,6 +1469,10 @@
                 const cell = document.createElement('div');
                 cell.className = 'cell';
                 cell.innerText = val;
+                
+                if (val === 20) {
+                    cell.classList.add('is-twenty');
+                }
 
                 const fontSize = Math.max(12, Math.floor(cellSize * 0.45));
                 cell.style.fontSize = fontSize + 'px';
