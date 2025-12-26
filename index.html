@@ -1706,16 +1706,9 @@
                             handleScroll();             // 强制计算一次背景色
                         }
                     }, 100);
+
+                    return;
                 }
-                else {
-                    setTimeout(() => {
-                        const firstUnplayed = document.querySelector('.level-btn:not(.played)');
-                        if (firstUnplayed) {
-                            firstUnplayed.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    }, 100);
-                }
-                return;
             }
 
             // 2. 实验室模式 (直接用 lab)
@@ -1734,6 +1727,26 @@
                 switchTab(targetTab);
             } else {
                 switchTab('adventure'); // 默认
+
+                if (!lv && !size && !seed) {
+                    setTimeout(() => {
+                        // 1. 寻找第一个没有 'played' 标签的关卡 (即：未玩过的)
+                        // 注：代码里 perfect 的关卡同时也拥有 played 标签，所以这一句就能过滤掉所有已玩过的
+                        const firstUnplayed = document.querySelector('.level-btn:not(.played)');
+
+                        if (firstUnplayed) {
+                            // 场景 A: 还有关卡没玩，滚动到该关卡
+                            firstUnplayed.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        } else {
+                            // 场景 B: 全部都玩过了 (找不到 unplayed)，滚动到底部
+                            const scrollContainer = document.getElementById('main-scroll');
+                            scrollContainer.scrollTo({
+                                top: scrollContainer.scrollHeight,
+                                behavior: 'smooth'
+                            });
+                        }
+                    }, 100);
+                }
             }
         }
 
