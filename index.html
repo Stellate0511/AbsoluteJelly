@@ -295,6 +295,8 @@
             font-size: 12px;
             margin-left: 10px;
             backdrop-filter: blur(4px);
+            align-self: center;
+            transform: translateY(1px);
         }
 
         .level-grid {
@@ -387,7 +389,8 @@
             color: #555;
         }
 
-        input[type="text"] {
+        input[type="text"],
+        input[type="number"] {
             width: 100%;
             padding: 14px;
             border: none;
@@ -565,8 +568,8 @@
             z-index: 1;
         }
 
-        /* --- 新增：数字 20 的专属金色样式 --- */
-        .cell.is-twenty {
+        /* --- 数字 20 的专属金色样式 --- */
+        .cell.is-target {
             /* 金色渐变背景，使用 !important 覆盖 JS 设置的动态颜色 */
             background: #FFE700 !important;
             /* 深褐色文字，与金色形成高对比 */
@@ -592,7 +595,7 @@
             animation: breathe 1.5s infinite alternate;
         }
 
-        .cell.is-twenty.selected::after {
+        .cell.is-target.selected::after {
             border: 3px solid rgba(124, 77, 0, 0.7) !important;
         }
 
@@ -866,13 +869,15 @@
                     <h2 style="margin-top:0; color:var(--text-color); font-size: 18px;">实验室</h2>
 
                     <div class="control-group">
-                        <label>方阵大小: <span id="size-display" style="color:var(--accent-color)">3</span> x <span
-                                id="size-display-2">3</span></label>
-                        <input type="range" id="input-n" min="3" max="10" value="3">
+                        <label>目标数字: <span id="target-display" style="color:var(--accent-color)">20</span></label>
+                        <div style="display:flex; gap:10px;">
+                            <input type="number" id="input-target-num" value="20" min="2" max="10000" step="5">
+                        </div>
+                        <p style="font-size:12px; color:#999; margin-top:5px;">范围2~10000</p>
                     </div>
 
                     <div class="control-group">
-                        <label>世界种子 (Seed):</label>
+                        <label>世界种子:</label>
                         <div style="display:flex; gap:10px;">
                             <input type="text" id="input-seed" value="Gummy">
                             <button class="icon-btn" onclick="randomizeSeed()"
@@ -895,8 +900,8 @@
                         <p>把所有果冻块合成 <b>一整块</b>。</p>
                         <p>合成完成时，最终数字就是你的得分：</p>
                         <ul>
-                            <li><span style="color:#F57F17; font-weight:bold">20</span> = 完美目标</li>
-                            <li>不是 20 也算完成，可以继续挑战更高得分</li>
+                            <li><span style="color:#F57F17; font-weight:bold">目标数字</span>（标记为金色）为完美目标</li>
+                            <li>如果无法达到，可以挑战尽可能高的得分</li>
                         </ul>
                     </div>
 
@@ -982,14 +987,16 @@
 
     <script>
         /* --- 1. 配置：将颜色拆分为 Start/End 方便插值 --- */
+        const TARGET_VALUES = [10, 20, 50, 100, 200, 500, 1000];
+
         const SECTIONS = [
-            { title: "3x3 入门", n: 3, start: 1, end: 100, colors: ['#a1c4fd', '#c2e9fb'] },
-            { title: "4x4 进阶", n: 4, start: 101, end: 200, colors: ['#d4fc79', '#96e6a1'] },
-            { title: "5x5 挑战", n: 5, start: 201, end: 300, colors: ['#fccb90', '#d57eeb'] },
-            { title: "6x6 烧脑", n: 6, start: 301, end: 400, colors: ['#e0c3fc', '#8ec5fc'] },
-            { title: "7x7 大师", n: 7, start: 401, end: 500, colors: ['#ff9a9e', '#fecfef'] },
-            { title: "8x8 宗师", n: 8, start: 501, end: 600, colors: ['#f093fb', '#f5576c'] },
-            { title: "9x9 巅峰", n: 9, start: 601, end: 700, colors: ['#4facfe', '#00f2fe'] }
+            { title: "入门", start: 1, end: 100, target: TARGET_VALUES[0], colors: ['#a1c4fd', '#c2e9fb'] },
+            { title: "初级", start: 101, end: 200, target: TARGET_VALUES[1], colors: ['#d4fc79', '#96e6a1'] },
+            { title: "中级", start: 201, end: 300, target: TARGET_VALUES[2], colors: ['#fccb90', '#d57eeb'] },
+            { title: "高级", start: 301, end: 400, target: TARGET_VALUES[3], colors: ['#e0c3fc', '#8ec5fc'] },
+            { title: "大师", start: 401, end: 500, target: TARGET_VALUES[4], colors: ['#ff9a9e', '#fecfef'] },
+            { title: "宗师", start: 501, end: 600, target: TARGET_VALUES[5], colors: ['#f093fb', '#f5576c'] },
+            { title: "巅峰", start: 601, end: 700, target: TARGET_VALUES[6], colors: ['#4facfe', '#00f2fe'] }
         ];
 
         const VIBRANT_COLORS = [
@@ -1035,19 +1042,20 @@
 
         /* --- 3. 游戏状态 & 数据 --- */
         let state = {
-            n: 3,
+            n: 3,           // 强制固定为 3
+            target: 20,     // 新增：当前关卡的目标数字
             seed: null,
             levelId: null,
             grid: [],
             groups: [],
-            groupColors: {}, // 存储每个group的颜色索引，防止相邻同色
+            groupColors: {},
             history: [],
             selectedGroup: null,
             dragStartGroup: null,
             active: false
         };
 
-        const RECORD_KEY = 'blob_records';
+        const RECORD_KEY = 'blob_records_v2';
         function getRecords() {
             try {
                 return JSON.parse(localStorage.getItem(RECORD_KEY) || '{}');
@@ -1084,8 +1092,9 @@
         }
 
         /* --- 5. 核心逻辑 --- */
-        function initGame(n, seed, levelId = null) {
-            state.n = n;
+        function initGame(target, seed, levelId = null) {
+            state.n = 3;
+            state.target = target;
             state.seed = seed;
             state.levelId = levelId;
             state.history = [];
@@ -1104,10 +1113,10 @@
             }
 
             const rng = new Random(seed);
-            const total = n * n;
+            const total = 9;
 
             let attempts = 0;
-            const MAX_ATTEMPTS = 50; //以此防止某些极端种子导致死循环卡死浏览器
+            const MAX_ATTEMPTS = 200; //以此防止某些极端种子导致死循环卡死浏览器
 
             do {
                 attempts++;
@@ -1118,13 +1127,13 @@
 
                 // 1. 生成基础网格
                 for (let i = 0; i < total; i++) {
-                    state.grid.push(rng.nextInt(0, 20));
+                    state.grid.push(rng.nextInt(0, target));
                     state.groups.push(i);
                 }
 
-                // 2. 插入幸运数字 20
+                // 2. 插入幸运数字
                 const luckyIndex = rng.nextInt(0, total - 1);
-                state.grid[luckyIndex] = 20;
+                state.grid[luckyIndex] = target;
 
                 // 3. 奇偶性修正 (总和必须为偶数才有解)
                 let sum = state.grid.reduce((a, b) => a + b, 0);
@@ -1135,7 +1144,7 @@
                 }
 
                 // 4. 验证逻辑
-                if (state.n > 4 || n34Valid(state.grid) || attempts >= MAX_ATTEMPTS) {
+                if (n3Valid(state.grid, target) || attempts >= MAX_ATTEMPTS) {
                     break;
                 }
             } while (true);
@@ -1150,21 +1159,27 @@
         }
 
         /**
-         * 适配 3x3(9格) / 4x4(16格)：
-         * 输入 nums（长度 9 或 16，值 0..20），返回“最大可达最终值是否为 20”
+         * 仅支持 3x3(9格)：
+         * 输入 nums（长度 9，值 0..target），返回“最大可达最终值是否为 target”
+         *
+         * 规则不变：
+         * - 只能合并两块：A,B 都连通、且 A 与 B 四邻接相邻
+         * - 合并产生所有 |a-b|
          */
-        function n34Valid(nums) {
-            if (!Array.isArray(nums) || !(nums.length === 9 || nums.length === 16)) {
-                throw new Error("nums 必须是长度为 9(3x3) 或 16(4x4) 的数组");
+        function n3Valid(nums, target) {
+            if (!Array.isArray(nums) || nums.length !== 9) {
+                throw new Error("nums 必须是长度为 9(3x3) 的数组");
             }
-            const n = nums.length;
-            const L = Math.sqrt(n);
-            if (L !== 3 && L !== 4) {
-                throw new Error("仅支持 3x3 或 4x4");
+            if (!Number.isInteger(target) || target < 0) {
+                throw new Error("target 必须是非负整数");
             }
+
+            const n = 9;
+            const L = 3;
+
             for (const x of nums) {
-                if (x < 0 || x > 20 || (x | 0) !== x) {
-                    throw new Error("输入值必须是 0..20 的整数");
+                if ((x | 0) !== x || x < 0 || x > target) {
+                    throw new Error(`输入值必须是 0..${target} 的整数`);
                 }
             }
 
@@ -1201,12 +1216,11 @@
 
             // ----------------------------
             // 2) neigh[mask]：mask 内所有格子的邻居并集
-            // 用于判断两块是否相邻：(neigh[A] & B) != 0
             // ----------------------------
             const neigh = new Int32Array(1 << n);
             for (let mask = 1; mask <= FULL; mask++) {
                 const lsb = mask & -mask;
-                const idx = (Math.clz32(lsb) ^ 31); // lsb 的下标
+                const idx = (Math.clz32(lsb) ^ 31);
                 neigh[mask] = neigh[mask ^ lsb] | cellNb[idx];
             }
 
@@ -1231,7 +1245,7 @@
                 connected[mask] = (seen === mask) ? 1 : 0;
             }
 
-            // 把连通 mask 按大小分组，DP 按 size 从小到大
+            // 连通 mask 按大小分组
             const masksBySize = Array.from({ length: n + 1 }, () => []);
             for (let mask = 1; mask <= FULL; mask++) {
                 if (connected[mask]) {
@@ -1240,53 +1254,54 @@
             }
 
             // ----------------------------
-            // 4) dp[mask]：21-bit 位集（0..20 可达）
+            // 4) dp[mask]：BigInt 位集（0..target 可达）
             // ----------------------------
-            const dp = new Int32Array(1 << n);
+            const dp = new Array(1 << n).fill(0n);
             for (let i = 0; i < n; i++) {
-                dp[1 << i] = (1 << nums[i]);
+                dp[1 << i] = 1n << BigInt(nums[i]);
             }
 
-            // 小优化：把一个位集转成“包含哪些值”的数组，并做缓存
-            const bitsetToValuesCache = new Map();
+            // 小优化：把 BigInt 位集转为值数组并缓存
+            const bitsetToValuesCache = new Map(); // key: BigInt -> number[]
             function valuesOf(bitset) {
                 let arr = bitsetToValuesCache.get(bitset);
                 if (arr) return arr;
                 arr = [];
-                for (let v = 0; v <= 20; v++) {
-                    if (bitset & (1 << v)) arr.push(v);
+                for (let v = 0; v <= target; v++) {
+                    if (((bitset >> BigInt(v)) & 1n) !== 0n) arr.push(v);
                 }
                 bitsetToValuesCache.set(bitset, arr);
                 return arr;
             }
 
-            // 合并两个位集：输出所有 |a-b| 的位集
+            // 合并两个位集：输出所有 |a-b| 的位集（BigInt）
             function combine(bitA, bitB) {
                 const Avals = valuesOf(bitA);
                 const Bvals = valuesOf(bitB);
-                let out = 0;
+                let out = 0n;
                 for (let i = 0; i < Avals.length; i++) {
                     const a = Avals[i];
                     for (let j = 0; j < Bvals.length; j++) {
                         const b = Bvals[j];
-                        out |= (1 << Math.abs(a - b));
+                        const d = a >= b ? (a - b) : (b - a);
+                        out |= 1n << BigInt(d);
                     }
                 }
                 return out;
             }
 
+            const targetBit = 1n << BigInt(target);
+
             // ----------------------------
             // 5) 子集 DP（只对连通 mask 做）
-            // 枚举拆分 A,B：A 必须包含 mask 的最小位（去重）
             // ----------------------------
             for (let size = 2; size <= n; size++) {
                 for (const mask of masksBySize[size]) {
-                    let res = 0;
+                    let res = 0n;
                     const minbit = mask & -mask;
 
-                    // 枚举 A 的非空真子集
                     for (let A = (mask - 1) & mask; A; A = (A - 1) & mask) {
-                        if ((A & minbit) === 0) continue;
+                        if ((A & minbit) === 0) continue; // 去重
                         const B = mask ^ A;
                         if (B === 0) continue;
 
@@ -1295,30 +1310,27 @@
 
                         const bitA = dp[A];
                         const bitB = dp[B];
-                        if (bitA === 0 || bitB === 0) continue;
+                        if (bitA === 0n || bitB === 0n) continue;
 
                         res |= combine(bitA, bitB);
 
-                        // 早停：如果已经能得到 20，并且我们只关心最大是否为20，
-                        // 仍需确认“最大值”是不是 20（不会超过20），所以可直接早停。
-                        if (res & (1 << 20)) {
-                            // 因为值域被限制在 0..20，能得到 20 就代表最大值=20
+                        // 早停：能得到 target 即可
+                        if ((res & targetBit) !== 0n) {
                             dp[mask] = res;
                             break;
                         }
                     }
 
-                    if (dp[mask] === 0) dp[mask] = res; // 如果没早停写入，这里写入
+                    if (dp[mask] === 0n) dp[mask] = res;
                 }
             }
 
             // ----------------------------
-            // 6) FULL 的最大值是否为 20？
-            // 由于最大不可能超过 20，所以 dp[FULL] 含 20 等价于最大值=20
+            // 6) FULL 的最大值是否为 target？
+            // 值域限制 0..target，所以包含 target 等价于最大=target
             // ----------------------------
-            return (dp[FULL] & (1 << 20)) !== 0;
+            return (dp[FULL] & targetBit) !== 0n;
         }
-
 
         // 为 Group 分配一个不与邻居冲突的颜色
         function assignColorForGroup(gId) {
@@ -1372,7 +1384,7 @@
 
         function getNeighbors(gId) {
             const neighbors = new Set();
-            const n = state.n;
+            const n = 3;
             for (let i = 0; i < n * n; i++) {
                 if (state.groups[i] !== gId) continue;
                 const r = Math.floor(i / n), c = i % n;
@@ -1438,7 +1450,7 @@
         function renderBoard() {
             const board = document.getElementById('game-board');
             board.innerHTML = '';
-            const n = state.n;
+            const n = 3;
 
             const container = document.getElementById('game-board-container');
             const cs = getComputedStyle(container);
@@ -1469,12 +1481,15 @@
                 const cell = document.createElement('div');
                 cell.className = 'cell';
                 cell.innerText = val;
-                
-                if (val === 20) {
-                    cell.classList.add('is-twenty');
+
+                if (val === state.target) {
+                    cell.classList.add('is-target');
                 }
 
-                const fontSize = Math.max(12, Math.floor(cellSize * 0.45));
+                let fontSize = Math.max(12, Math.floor(cellSize * 0.45));
+                if (val > 9999) fontSize = Math.floor(cellSize * 0.25); // 5位数
+                else if (val > 999) fontSize = Math.floor(cellSize * 0.3); // 4位数
+                else if (val > 99) fontSize = Math.floor(cellSize * 0.35); // 3位数
                 cell.style.fontSize = fontSize + 'px';
 
                 cell.dataset.index = i;
@@ -1559,20 +1574,23 @@
                 div.className = 'level-section';
                 div.id = `section-${index}`;
                 div.dataset.index = index;
-                div.innerHTML = `<div class="section-title">${sec.title} <span class="section-badge">${sec.n}x${sec.n}</span></div>`;
+                // 标题显示目标数字
+                div.innerHTML = `<div class="section-title">${sec.title} <span class="section-badge">目标: ${sec.target}</span></div>`;
                 const grid = document.createElement('div');
                 grid.className = 'level-grid';
 
                 for (let i = sec.start; i <= sec.end; i++) {
                     const btn = document.createElement('div');
                     btn.className = 'level-btn';
-                    btn.innerText = i;
+                    btn.innerText = i; // 按钮依旧显示 1~700 的关卡号
                     const rec = allRecords[i];
                     if (rec !== undefined) {
                         btn.classList.add('played');
-                        if (rec >= 20) btn.classList.add('perfect');
+                        // 修改：判断是否完美通关 (根据该区段的 target)
+                        if (rec === sec.target) btn.classList.add('perfect');
                     }
-                    btn.onclick = () => showStartModal(i, sec.n, sec.colors);
+                    // 点击时传入具体的 LevelID 和该区段的 Target
+                    btn.onclick = () => showStartModal(i, sec.target, sec.colors);
                     grid.appendChild(btn);
                 }
                 div.appendChild(grid);
@@ -1670,17 +1688,20 @@
         const modal = document.getElementById('modal-overlay');
         function closeModal() { modal.style.display = 'none'; }
 
-        function showStartModal(lv, n, colors) {
+        function showStartModal(lv, target, colors) {
             document.getElementById('modal-title').innerText = `第 ${lv} 关`;
+            document.getElementById('modal-msg').innerHTML = `<div style="margin-bottom:5px; color:#555">目标数字</div><div style="font-size:32px; font-weight:800; color:var(--accent-color)">${target}</div>`;
+
             const rec = getRecord(lv);
-            if (rec === undefined)
-                document.getElementById('modal-msg').innerHTML = `无记录`;
-            else
-                document.getElementById('modal-msg').innerHTML = `最高记录: <span class="score-val">${rec}</span>`;
+            if (rec !== undefined) {
+                // 如果有记录，追加显示
+                document.getElementById('modal-msg').innerHTML += `<div style="font-size:13px; color:#888; margin-top:10px">当前记录: ${rec}</div>`;
+            }
+
             const btn = document.createElement('button');
             btn.className = 'btn-main';
             btn.innerText = '开始挑战';
-            btn.onclick = () => startLevel(lv, n, colors);
+            btn.onclick = () => startLevel(lv, target, colors);
 
             const btnContainer = document.getElementById('modal-buttons');
             btnContainer.innerHTML = '';
@@ -1695,9 +1716,8 @@
             const sec = SECTIONS.find(s => nextId >= s.start && nextId <= s.end);
 
             if (sec) {
-                startLevel(nextId, sec.n, sec.colors);
+                startLevel(nextId, sec.target, sec.colors);
             } else {
-                // 如果找不到配置（通关了），则返回主页
                 closeModal();
                 exitGame();
             }
@@ -1751,7 +1771,7 @@
             modal.style.display = 'flex';
         }
 
-        function startLevel(lv, n, colors) {
+        function startLevel(lv, target, colors) {
             closeModal();
             const gv = document.getElementById('game-view');
             gv.style.display = 'flex';
@@ -1759,20 +1779,20 @@
 
             updateUrl(`?type=adventure&lv=${lv}`, 'push');
 
-            initGame(n, lv, lv);
+            initGame(target, lv.toString(), lv);
             requestAnimationFrame(renderBoard);
         }
 
         function startLabGame() {
-            const n = parseInt(document.getElementById('input-n').value);
+            const target = document.getElementById('input-target-num').valueAsNumber || 20;
             const seed = document.getElementById('input-seed').value || 'random';
             const gv = document.getElementById('game-view');
             gv.style.display = 'flex';
             gv.style.background = 'linear-gradient(120deg, #e0c3fc 0%, #8ec5fc 100%)';
 
-            updateUrl(`?type=lab&size=${n}&seed=${seed}`, 'push');
+            updateUrl(`?type=lab&target=${target}&seed=${seed}`, 'push');
 
-            initGame(n, seed, null);
+            initGame(target, seed, null);
             requestAnimationFrame(renderBoard);
         }
 
@@ -1793,7 +1813,7 @@
         }
 
         function restartGame() {
-            initGame(state.n, state.seed, state.levelId);
+            initGame(state.target, state.seed, state.levelId);
         }
 
         window.switchTab = (tab) => {
@@ -1834,9 +1854,15 @@
             }
         };
 
-        document.getElementById('input-n').addEventListener('input', e => {
-            document.getElementById('size-display').innerText = e.target.value;
-            document.getElementById('size-display-2').innerText = e.target.value;
+        // 绑定 Range 和 Number Input 的双向同步
+        const numInput = document.getElementById('input-target-num');
+        const display = document.getElementById('target-display');
+
+        numInput.addEventListener('input', (e) => {
+            let val = parseInt(e.target.value);
+            if (val > 10000) val = 10000;
+            if (val < 2) val = 2; // 最小限制
+            display.innerText = val;
         });
 
         window.randomizeSeed = () => {
@@ -1927,7 +1953,7 @@
             const targetTab = params.get('type');
 
             const lv = parseInt(params.get('lv'));
-            const size = parseInt(params.get('size'));
+            const targetParam = parseInt(params.get('target'));
             const seed = params.get('seed');
 
             // 1. 冒险模式关卡
@@ -1936,7 +1962,7 @@
                 const sec = SECTIONS.find(s => lv >= s.start && lv <= s.end);
                 if (sec) {
                     // 启动游戏界面
-                    startLevel(lv, sec.n, sec.colors);
+                    startLevel(lv, sec.target, sec.colors);
 
                     // 然后将列表滚动到对应区域，确保背景色 (#bg-layer) 正确
                     setTimeout(() => {
@@ -1953,12 +1979,10 @@
             }
 
             // 2. 实验室模式 (直接用 lab)
-            if (targetTab === 'lab' && size && seed) {
+            if (targetTab === 'lab' && targetParam && seed) {
                 switchTab('lab');
-                document.getElementById('input-n').value = size;
+                document.getElementById('input-target-num').value = targetParam;
                 document.getElementById('input-seed').value = seed;
-                document.getElementById('size-display').innerText = size;
-                document.getElementById('size-display-2').innerText = size;
                 startLabGame();
                 return;
             }
@@ -1969,7 +1993,7 @@
             } else {
                 switchTab('adventure'); // 默认
 
-                if (!lv && !size && !seed) {
+                if (!lv && !targetParam && !seed) {
                     setTimeout(() => {
                         // 1. 寻找第一个没有 'played' 标签的关卡 (即：未玩过的)
                         // 注：代码里 perfect 的关卡同时也拥有 played 标签，所以这一句就能过滤掉所有已玩过的
