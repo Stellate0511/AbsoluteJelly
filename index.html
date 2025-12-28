@@ -1160,7 +1160,7 @@
 
         /**
          * 仅支持 3x3(9格)：
-         * 输入 nums（长度 9，值 0..target），返回“最大可达最终值是否为 target”
+         * 输入 nums（长度 9，值 0..target），返回“是否可达最终值 target”
          *
          * 规则不变：
          * - 只能合并两块：A,B 都连通、且 A 与 B 四邻接相邻
@@ -1254,50 +1254,51 @@
             }
 
             // ----------------------------
-            // 4) dp[mask]：BigInt 位集（0..target 可达）
+            // 4) dp[mask]：number[]（去重后的可达值列表）
             // ----------------------------
-            const dp = new Array(1 << n).fill(0n);
-            for (let i = 0; i < n; i++) {
-                dp[1 << i] = 1n << BigInt(nums[i]);
-            }
+            const dp = new Array(1 << n);
+            for (let i = 0; i < n; i++) dp[1 << i] = [nums[i]];
 
-            // 小优化：把 BigInt 位集转为值数组并缓存
-            const bitsetToValuesCache = new Map(); // key: BigInt -> number[]
-            function valuesOf(bitset) {
-                let arr = bitsetToValuesCache.get(bitset);
-                if (arr) return arr;
-                arr = [];
-                for (let v = 0; v <= target; v++) {
-                    if (((bitset >> BigInt(v)) & 1n) !== 0n) arr.push(v);
+            // 去重用 epoch 标记数组：避免每次 combine 清空 O(target)
+            const mark = new Int32Array(target + 1);
+            let epoch = 1;
+
+            function combineToArray(Avals, Bvals) {
+                // 外层遍历更短的集合
+                let X = Avals, Y = Bvals;
+                if (X.length > Y.length) { const tmp = X; X = Y; Y = tmp; }
+
+                const out = [];
+                const cur = epoch++;
+                // 防止 epoch 溢出（极端情况）
+                if (epoch === 0x7fffffff) {
+                    mark.fill(0);
+                    epoch = 1;
                 }
-                bitsetToValuesCache.set(bitset, arr);
-                return arr;
-            }
 
-            // 合并两个位集：输出所有 |a-b| 的位集（BigInt）
-            function combine(bitA, bitB) {
-                const Avals = valuesOf(bitA);
-                const Bvals = valuesOf(bitB);
-                let out = 0n;
-                for (let i = 0; i < Avals.length; i++) {
-                    const a = Avals[i];
-                    for (let j = 0; j < Bvals.length; j++) {
-                        const b = Bvals[j];
+                for (let i = 0; i < X.length; i++) {
+                    const a = X[i];
+                    for (let j = 0; j < Y.length; j++) {
+                        const b = Y[j];
                         const d = a >= b ? (a - b) : (b - a);
-                        out |= 1n << BigInt(d);
+                        if (mark[d] !== cur) {
+                            mark[d] = cur;
+                            out.push(d);
+                            // 早停：你只关心 target
+                            if (d === target) return { out, hitTarget: true };
+                        }
                     }
                 }
-                return out;
+                return { out, hitTarget: false };
             }
-
-            const targetBit = 1n << BigInt(target);
 
             // ----------------------------
             // 5) 子集 DP（只对连通 mask 做）
             // ----------------------------
             for (let size = 2; size <= n; size++) {
                 for (const mask of masksBySize[size]) {
-                    let res = 0n;
+                    let res = null; // res: number[] 或 null
+                    let hit = false;
                     const minbit = mask & -mask;
 
                     for (let A = (mask - 1) & mask; A; A = (A - 1) & mask) {
@@ -1308,28 +1309,42 @@
                         if (!connected[A] || !connected[B]) continue;
                         if ((neigh[A] & B) === 0) continue; // 必须边相邻
 
-                        const bitA = dp[A];
-                        const bitB = dp[B];
-                        if (bitA === 0n || bitB === 0n) continue;
+                        const valsA = dp[A];
+                        const valsB = dp[B];
+                        if (!valsA || !valsB) continue;
 
-                        res |= combine(bitA, bitB);
-
-                        // 早停：能得到 target 即可
-                        if ((res & targetBit) !== 0n) {
-                            dp[mask] = res;
-                            break;
+                        const { out, hitTarget } = combineToArray(valsA, valsB);
+                        if (!res) res = out;
+                        else {
+                            // 合并两个 out：还是用 epoch 去重一次即可
+                            const cur = epoch++;
+                            for (let k = 0; k < res.length; k++) mark[res[k]] = cur;
+                            for (let k = 0; k < out.length; k++) {
+                                const v = out[k];
+                                if (mark[v] !== cur) {
+                                    mark[v] = cur;
+                                    res.push(v);
+                                }
+                            }
+                            // epoch 溢出保护略（可同上处理）
                         }
+
+                        if (hitTarget) { hit = true; break; }
                     }
 
-                    if (dp[mask] === 0n) dp[mask] = res;
+                    dp[mask] = res || [];
+                    if (mask === FULL && hit) return true; // FULL 早停
                 }
             }
 
             // ----------------------------
-            // 6) FULL 的最大值是否为 target？
-            // 值域限制 0..target，所以包含 target 等价于最大=target
+            // 6) FULL 是否包含 target
             // ----------------------------
-            return (dp[FULL] & targetBit) !== 0n;
+            const finalVals = dp[FULL];
+            for (let i = 0; i < finalVals.length; i++) {
+                if (finalVals[i] === target) return true;
+            }
+            return false;
         }
 
         // 为 Group 分配一个不与邻居冲突的颜色
@@ -1784,7 +1799,7 @@
         }
 
         function startLabGame() {
-            const target = document.getElementById('input-target-num').valueAsNumber || 20;
+            const target = parseInt(document.getElementById('target-display').textContent, 10) || 20;
             const seed = document.getElementById('input-seed').value || 'random';
             const gv = document.getElementById('game-view');
             gv.style.display = 'flex';
@@ -1982,6 +1997,7 @@
             if (targetTab === 'lab' && targetParam && seed) {
                 switchTab('lab');
                 document.getElementById('input-target-num').value = targetParam;
+                document.getElementById('input-target-num').dispatchEvent(new Event('input', { bubbles: true }));
                 document.getElementById('input-seed').value = seed;
                 startLabGame();
                 return;
